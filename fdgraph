@@ -84,6 +84,7 @@ ftypeshapes = {
 def dotfilenode(node):
 	nid = node[0]
 	nlabel = node[1]
+	extra = ''
 	if nlabel.startswith("pipe:"):
 		m = S_IFIFO
 	elif nlabel.startswith("socket:"):
@@ -96,8 +97,9 @@ def dotfilenode(node):
 				raise
 			if nlabel.startswith("/dev/pts/"):
 				m = S_IFCHR
+			else:
+				m = S_IFREG
 	shape = ftypeshapes[m]
-	extra = ''
 	if nlabel.endswith(" (deleted)"):
 		    extra += ",style=dashed"
 		    nlabel = nlabel.replace(" (deleted)",'')
