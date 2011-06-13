@@ -1,0 +1,143 @@
+#!/usr/bin/python
+
+from __future__ import print_function
+import sys
+import os
+import errno
+import glob
+from stat import *
+
+fdmap = {}
+filemap = {}
+
+processedpids = set()
+
+procnodes = {}
+filenodes = {}
+edges = set()
+
+idmap = {}
+def getnodeid(s):
+	if s in idmap:
+		return idmap[s]
+	idmap[s] = "node%d" % len(idmap)
+	return idmap[s]
+
+def procname(pid):
+	tmp = open("/proc/%d/cmdline"%pid).read().split('\x00')[0]
+	return tmp.split()[0]
+
+def shouldfollow(name):
+	if name.startswith("socket:") or name.startswith("pipe:"):
+		return True
+	try:
+		mode = os.stat(name).st_mode
+	except OSError,e:
+		if e.errno == errno.ENOENT:
+			return False
+		else:
+			raise
+	if S_ISFIFO(mode) or S_ISSOCK(mode):
+		return True
+	return False
+
+def otherusers(name,than):
+	pids = [int(fd.split('/')[2]) for fd in filemap[name]]
+	return [p for p in pids if p != than]
+
+def fdgraph(pid):
+	processedpids.add(pid)
+	pname = procname(pid)
+	procnodeid = getnodeid("pid:%d" % pid)
+	proclabel = "%s\\n%d" % (pname,pid)
+
+	procnodes[procnodeid] = proclabel
+
+	fddir = "/proc/%d/fd/" % pid
+	for f in [f for f in fdmap if f.startswith(fddir)]:
+		fdnum = int(f.split('/')[-1])
+		fname = fdmap[f]
+		fni = getnodeid(fname)
+		filenodes[fni] = fname
+		edges.add((procnodeid,fni,fdnum))
+
+		if shouldfollow(fname):
+			others = otherusers(fname,pid)
+			for o in others:
+				if o not in processedpids:
+					fdgraph(o)
+
+def dotprocnode(node):
+	nid = node[0]
+	nlabel = node[1]
+	return "%s [label = \"%s\"];" % (nid,nlabel)
+
+ftypeshapes = {
+	S_IFDIR:"folder",
+	S_IFREG:"note",
+	S_IFIFO:"parallelogram",
+	S_IFSOCK:"hexagon",
+	S_IFBLK:"box3d",
+	S_IFCHR:"diamond",
+}
+
+def dotfilenode(node):
+	nid = node[0]
+	nlabel = node[1]
+	if nlabel.startswith("pipe:"):
+		m = S_IFIFO
+	elif nlabel.startswith("socket:"):
+		m = S_IFSOCK
+	else:
+		try:
+			m = S_IFMT(os.stat(nlabel).st_mode)
+		except OSError,e:
+			if e.errno != errno.ENOENT:
+				raise
+			if nlabel.startswith("/dev/pts/"):
+				m = S_IFCHR
+	shape = ftypeshapes[m]
+	extra = ''
+	if nlabel.endswith(" (deleted)"):
+		    extra += ",style=dashed"
+		    nlabel = nlabel.replace(" (deleted)",'')
+	return "%s [label = \"%s\",shape=%s%s];" % (nid,nlabel,shape,extra)
+
+def dotedge(edge):
+	return "%s -- %s [taillabel=\"%d\"];" % (edge[0],edge[1],edge[2])
+
+def dotgraph():
+	pdot = "\n\t".join([dotprocnode(n) for n in sorted(procnodes.items())])
+	fdot = "\n\t".join([dotfilenode(n) for n in sorted(filenodes.items())])
+	edot = "\n\t".join([dotedge(e) for e in sorted(edges)])
+
+	return "graph fds {\n\t%s\n\n\t%s\n\n\t%s\n}\n" % (pdot,fdot,edot)
+
+def usage():
+	print("Usage: fdgraph <pid>")
+	sys.exit(1)
+
+if __name__ == "__main__":
+
+	try:
+		pid = int(sys.argv[1])
+	except:
+		usage()
+
+	# try to get something approximating an atomic snapshot
+	fdlist = glob.glob("/proc/*/fd/*")
+	fdlist = [f for f in fdlist if not f.startswith("/proc/self/")]
+	fdlist = [f for f in fdlist if os.access(f,os.F_OK)]
+	files = [os.readlink(f) for f in fdlist]
+
+	fdmap = dict(zip(fdlist,files))
+
+	for (f,fd) in zip(files,fdlist):
+		if f in filemap:
+			filemap[f].append(fd)
+		else:
+			filemap[f] = [fd]
+
+	fdgraph(pid)
+
+	print(dotgraph(),end='')
