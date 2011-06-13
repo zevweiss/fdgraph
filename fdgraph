@@ -25,7 +25,7 @@ def getnodeid(s):
 
 def procname(pid):
 	tmp = open("/proc/%d/cmdline"%pid).read().split('\x00')[0]
-	return tmp.split()[0]
+	return tmp.split()[0].split('/')[-1]
 
 def shouldfollow(name):
 	if name.startswith("socket:") or name.startswith("pipe:"):
