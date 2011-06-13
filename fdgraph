@@ -127,8 +127,7 @@ if __name__ == "__main__":
 		usage()
 
 	# try to get something approximating an atomic snapshot
-	fdlist = glob.glob("/proc/*/fd/*")
-	fdlist = [f for f in fdlist if not f.startswith("/proc/self/")]
+	fdlist = glob.glob("/proc/[0-9]*/fd/*")
 	fdlist = [f for f in fdlist if os.access(f,os.F_OK)]
 	files = [os.readlink(f) for f in fdlist]
 
