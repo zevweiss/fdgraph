@@ -3,7 +3,7 @@ fdgraph
 
 A simple python script that, given a starting PID, outputs a graph (in
 GraphViz dot format) showing the files that process has open, as well
-as other processes which may communicating with it via pipes and
+as other processes which may be communicating with it via pipes and
 sockets.
 
 Suggested usage:
