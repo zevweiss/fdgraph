@@ -16,6 +16,7 @@ procnodes = {}
 filenodes = {}
 fdedges = set()
 pcedges = set()
+pipeedges = set()
 
 idmap = {}
 def getnodeid(s):
@@ -87,6 +88,26 @@ def addpcedges():
 		if ppid in processedpids:
 			pcedges.add((getprocnodeid(ppid), getprocnodeid(pid)))
 
+def reads(edge, nid):
+	return edge[1] == nid and (edge[3] & S_IRUSR and not edge[3] & S_IWUSR)
+
+def writes(edge, nid):
+	return edge[1] == nid and (edge[3] & S_IWUSR and not edge[3] & S_IRUSR)
+
+# Replace anonymous pipes with a single reader and single (distinct)
+# writer with a direct process-to-process edge.
+def filter_pipes():
+	for nid, label in list(filenodes.items()):
+		if label.startswith("pipe:["):
+			readers = [e for e in fdedges if reads(e, nid)]
+			writers = [e for e in fdedges if writes(e, nid)]
+			if len(readers) == 1 and len(writers) == 1:
+				r, w = readers[0], writers[0]
+				if r is not w:
+					pipeedges.add((w[0], r[0], w[2], r[2]))
+					fdedges.remove(r)
+					fdedges.remove(w)
+					del filenodes[nid]
 
 def dotprocnode(node):
 	nid = node[0]
@@ -141,18 +162,22 @@ def dotedge(edge):
 def dotpcedge(edge):
 	return "%s -> %s [style=dashed];" % (edge[0], edge[1])
 
+def dotpipeedge(edge):
+	return "%s -> %s [taillabel=%d,headlabel=%d,style=bold,dir=forward];" % edge
 
 def dotgraph():
 	pdot = "\n\t".join([dotprocnode(n) for n in sorted(procnodes.items())])
 	fdot = "\n\t".join([dotfilenode(n) for n in sorted(filenodes.items())])
 	edot = "\n\t".join([dotedge(e) for e in sorted(fdedges)])
 	pcdot = "\n\t".join([dotpcedge(e) for e in sorted(pcedges)])
+	pipedot = "\n\t".join([dotpipeedge(e) for e in sorted(pipeedges)])
 
 	dot = "digraph fds {\n"
 	dot += "\t%s\n\n" % pdot
 	dot += "\t%s\n\n" % fdot
 	dot += "\t%s\n\n" % edot
 	dot += "\t%s\n" % pcdot
+	dot += "\t%s\n" % pipedot
 	dot += "}\n"
 	return dot
 
@@ -182,5 +207,6 @@ if __name__ == "__main__":
 
 	fdgraph(pid)
 	addpcedges()
+	filter_pipes()
 
 	print(dotgraph(), end='')
