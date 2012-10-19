@@ -14,7 +14,8 @@ processedpids = set()
 
 procnodes = {}
 filenodes = {}
-edges = set()
+fdedges = set()
+pcedges = set()
 
 idmap = {}
 def getnodeid(s):
@@ -45,10 +46,13 @@ def otherusers(name,than):
 	pids = [int(fd.split('/')[2]) for fd in filemap[name]]
 	return [p for p in pids if p != than]
 
+def getprocnodeid(pid):
+	return getnodeid("pid:%s" % pid)
+
 def fdgraph(pid):
 	processedpids.add(pid)
 	pname = procname(pid)
-	procnodeid = getnodeid("pid:%d" % pid)
+	procnodeid = getprocnodeid(pid)
 	proclabel = "%s\\n%d" % (pname, pid)
 
 	procnodes[procnodeid] = proclabel
@@ -59,13 +63,30 @@ def fdgraph(pid):
 		fname = fdmap[f]
 		fni = getnodeid(fname)
 		filenodes[fni] = fname
-		edges.add((procnodeid,fni,fdnum))
+
+		# could also check O_RDONLY etc. against /proc/pid/fdinfo/*
+		try:
+			mode = S_IMODE(os.lstat(f).st_mode)
+		except OSError as e:
+			if e.errno == errno.ENOENT:
+				# link no longer exists, pretend it's RW
+				mode = S_IRUSR|S_IWUSR
+			else:
+				raise
+		fdedges.add((procnodeid, fni, fdnum, mode))
 
 		if shouldfollow(fname):
 			others = otherusers(fname, pid)
 			for o in others:
 				if o not in processedpids:
 					fdgraph(o)
+
+def addpcedges():
+	for pid in processedpids:
+		ppid = int(open("/proc/%d/stat" % pid).read().split()[3])
+		if ppid in processedpids:
+			pcedges.add((getprocnodeid(ppid), getprocnodeid(pid)))
+
 
 def dotprocnode(node):
 	nid = node[0]
@@ -102,18 +123,38 @@ def dotfilenode(node):
 	shape = ftypeshapes[m]
 	if nlabel.endswith(" (deleted)"):
 		    extra += ",style=dashed"
-		    nlabel = nlabel.replace(" (deleted)",'')
-	return "%s [label = \"%s\",shape=%s%s];" % (nid,nlabel,shape,extra)
+		    nlabel = nlabel.replace(" (deleted)", '')
+	return "%s [label = \"%s\",shape=%s%s];" % (nid, nlabel, shape, extra)
 
 def dotedge(edge):
-	return "%s -- %s [taillabel=\"%d\"];" % (edge[0],edge[1],edge[2])
+	src = edge[0]
+	dst = edge[1]
+	label = edge[2]
+	mode = edge[3]
+	edgedir = "none"
+	if mode & S_IRUSR and not mode & S_IWUSR:
+		edgedir = "back"
+	elif not mode & S_IRUSR and mode & S_IWUSR:
+		edgedir = "forward"
+	return "%s -> %s [taillabel=\"%d\",dir=%s];" % (src, dst, label, edgedir)
+
+def dotpcedge(edge):
+	return "%s -> %s [style=dashed];" % (edge[0], edge[1])
+
 
 def dotgraph():
 	pdot = "\n\t".join([dotprocnode(n) for n in sorted(procnodes.items())])
 	fdot = "\n\t".join([dotfilenode(n) for n in sorted(filenodes.items())])
-	edot = "\n\t".join([dotedge(e) for e in sorted(edges)])
+	edot = "\n\t".join([dotedge(e) for e in sorted(fdedges)])
+	pcdot = "\n\t".join([dotpcedge(e) for e in sorted(pcedges)])
 
-	return "graph fds {\n\t%s\n\n\t%s\n\n\t%s\n}\n" % (pdot,fdot,edot)
+	dot = "digraph fds {\n"
+	dot += "\t%s\n\n" % pdot
+	dot += "\t%s\n\n" % fdot
+	dot += "\t%s\n\n" % edot
+	dot += "\t%s\n" % pcdot
+	dot += "}\n"
+	return dot
 
 def usage():
 	print("Usage: fdgraph <pid>")
@@ -140,5 +181,6 @@ if __name__ == "__main__":
 			filemap[f] = [fd]
 
 	fdgraph(pid)
+	addpcedges()
 
 	print(dotgraph(), end='')
