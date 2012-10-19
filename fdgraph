@@ -32,7 +32,7 @@ def shouldfollow(name):
 		return True
 	try:
 		mode = os.stat(name).st_mode
-	except OSError,e:
+	except OSError as e:
 		if e.errno == errno.ENOENT:
 			return False
 		else:
@@ -49,7 +49,7 @@ def fdgraph(pid):
 	processedpids.add(pid)
 	pname = procname(pid)
 	procnodeid = getnodeid("pid:%d" % pid)
-	proclabel = "%s\\n%d" % (pname,pid)
+	proclabel = "%s\\n%d" % (pname, pid)
 
 	procnodes[procnodeid] = proclabel
 
@@ -62,7 +62,7 @@ def fdgraph(pid):
 		edges.add((procnodeid,fni,fdnum))
 
 		if shouldfollow(fname):
-			others = otherusers(fname,pid)
+			others = otherusers(fname, pid)
 			for o in others:
 				if o not in processedpids:
 					fdgraph(o)
@@ -70,15 +70,15 @@ def fdgraph(pid):
 def dotprocnode(node):
 	nid = node[0]
 	nlabel = node[1]
-	return "%s [label = \"%s\"];" % (nid,nlabel)
+	return "%s [label = \"%s\"];" % (nid, nlabel)
 
 ftypeshapes = {
-	S_IFDIR:"folder",
-	S_IFREG:"note",
-	S_IFIFO:"parallelogram",
-	S_IFSOCK:"hexagon",
-	S_IFBLK:"box3d",
-	S_IFCHR:"diamond",
+	S_IFDIR: "folder",
+	S_IFREG: "note",
+	S_IFIFO: "parallelogram",
+	S_IFSOCK: "hexagon",
+	S_IFBLK: "box3d",
+	S_IFCHR: "diamond",
 }
 
 def dotfilenode(node):
@@ -92,7 +92,7 @@ def dotfilenode(node):
 	else:
 		try:
 			m = S_IFMT(os.stat(nlabel).st_mode)
-		except OSError,e:
+		except OSError as e:
 			if e.errno != errno.ENOENT:
 				raise
 			if nlabel.startswith("/dev/pts/"):
@@ -128,12 +128,12 @@ if __name__ == "__main__":
 
 	# try to get something approximating an atomic snapshot
 	fdlist = glob.glob("/proc/[0-9]*/fd/*")
-	fdlist = [f for f in fdlist if os.access(f,os.F_OK)]
+	fdlist = [f for f in fdlist if os.access(f, os.F_OK)]
 	files = [os.readlink(f) for f in fdlist]
 
-	fdmap = dict(zip(fdlist,files))
+	fdmap = dict(zip(fdlist, files))
 
-	for (f,fd) in zip(files,fdlist):
+	for f, fd in zip(files, fdlist):
 		if f in filemap:
 			filemap[f].append(fd)
 		else:
@@ -141,4 +141,4 @@ if __name__ == "__main__":
 
 	fdgraph(pid)
 
-	print(dotgraph(),end='')
+	print(dotgraph(), end='')
