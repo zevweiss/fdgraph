@@ -42,7 +42,7 @@ def shouldfollow(name):
 		return True
 	return False
 
-def otherusers(name,than):
+def otherusers(name, than):
 	pids = [int(fd.split('/')[2]) for fd in filemap[name]]
 	return [p for p in pids if p != than]
 
@@ -142,9 +142,9 @@ def dotfilenode(node):
 				m = S_IFREG
 	shape = ftypeshapes[m]
 	if nlabel.endswith(" (deleted)"):
-		    extra += ",style=dashed"
+		    extra += ", style=dashed"
 		    nlabel = nlabel.replace(" (deleted)", '')
-	return "%s [label = \"%s\",shape=%s%s];" % (nid, nlabel, shape, extra)
+	return "%s [label = \"%s\", shape=%s%s];" % (nid, nlabel, shape, extra)
 
 def dotedge(edge):
 	src = edge[0]
@@ -156,13 +156,13 @@ def dotedge(edge):
 		edgedir = "back"
 	elif not mode & S_IRUSR and mode & S_IWUSR:
 		edgedir = "forward"
-	return "%s -> %s [taillabel=\"%d\",dir=%s];" % (src, dst, label, edgedir)
+	return "%s -> %s [taillabel=\"%d\", dir=%s];" % (src, dst, label, edgedir)
 
 def dotpcedge(edge):
 	return "%s -> %s [style=dashed];" % (edge[0], edge[1])
 
 def dotpipeedge(edge):
-	return "%s -> %s [taillabel=%d,headlabel=%d,style=bold,dir=forward];" % edge
+	return "%s -> %s [taillabel=%d, headlabel=%d, style=bold, dir=forward];" % edge
 
 def dotgraph():
 	pdot = "\n\t".join([dotprocnode(n) for n in sorted(procnodes.items())])
