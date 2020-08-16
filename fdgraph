@@ -4,6 +4,7 @@ import sys
 import os
 import errno
 import glob
+import argparse
 from stat import *
 
 fdmap = {}
@@ -180,16 +181,12 @@ def dotgraph():
 	dot += "}\n"
 	return dot
 
-def usage():
-	print("Usage: fdgraph <pid>")
-	sys.exit(1)
-
 if __name__ == "__main__":
 
-	try:
-		pid = int(sys.argv[1])
-	except:
-		usage()
+	parser = argparse.ArgumentParser(description="file descriptors to graphviz")
+	parser.add_argument("pid", nargs="+", type=int,
+			    help="PIDs to trace file descriptors from")
+	args = parser.parse_args()
 
 	# try to get something approximating an atomic snapshot
 	fdlist = glob.glob("/proc/[0-9]*/fd/*")
@@ -204,7 +201,9 @@ if __name__ == "__main__":
 		else:
 			filemap[f] = [fd]
 
-	fdgraph(pid)
+	for pid in args.pid:
+		if pid not in processedpids:
+			fdgraph(pid)
 	addpcedges()
 	filter_pipes()
 
