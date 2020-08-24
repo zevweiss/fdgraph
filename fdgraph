@@ -109,6 +109,24 @@ def filter_pipes():
 					fdedges.remove(w)
 					del filenodes[nid]
 
+def annotate_unix_socket_paths():
+	sockpaths = {}
+	with open('/proc/net/unix') as f:
+		f.readline() # skip header line
+		for line in f:
+			parts = line.split()
+			if len(parts) < 8:
+				continue
+			inode = int(parts[6])
+			path = parts[7]
+			sockpaths[inode] = path
+
+	for nid, label in list(filenodes.items()):
+		if label.startswith("socket:["):
+			inode = int(label.split('[')[1][:-1])
+			if inode in sockpaths:
+				filenodes[nid] = '%s\\n%s' % (label, sockpaths[inode])
+
 def dotprocnode(node):
 	nid = node[0]
 	nlabel = node[1]
@@ -206,5 +224,6 @@ if __name__ == "__main__":
 			fdgraph(pid)
 	addpcedges()
 	filter_pipes()
+	annotate_unix_socket_paths()
 
 	print(dotgraph(), end='')
